@@ -1,0 +1,20 @@
+From: Alice Example <alice@example.com>
+To: Bob Example <bob@example.org>
+Cc: carol@example.net
+Reply-To: alice.replies@example.com
+Subject: Quarterly report attached
+Date: Mon, 12 Aug 2024 09:30:00 -0400
+Message-ID: <abc123@example.com>
+Return-Path: <alice@example.com>
+Received: from mail.example.com (mail.example.com [203.0.113.10])
+    by mx.example.org with ESMTP id xyz1; Mon, 12 Aug 2024 09:30:05 -0400
+Authentication-Results: mx.example.org; spf=pass smtp.mailfrom=example.com; dkim=pass; dmarc=pass
+Content-Type: text/plain; charset="utf-8"
+
+Hi Bob,
+
+Here is the quarterly report we discussed. Let me know if you have
+any questions.
+
+Best,
+Alice

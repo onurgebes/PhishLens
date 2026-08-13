@@ -1,0 +1,8 @@
+From: Weird Sender <weird@example.com>
+To: "Doe, Jane" <jane@example.org>, John Smith <john@example.net>
+Subject: Test with a broken date header
+Date: not-a-real-date-value
+Message-ID: <weird-001@example.com>
+
+This email has a broken Date header on purpose, to make sure the
+parser degrades gracefully instead of crashing.

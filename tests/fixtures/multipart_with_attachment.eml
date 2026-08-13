@@ -1,0 +1,46 @@
+From: Notifications <notify@example.com>
+To: Bob Example <bob@example.org>, "Smith, Carol" <carol@example.net>
+Subject: Your invoice is ready
+Date: Tue, 13 Aug 2024 14:00:00 -0400
+Message-ID: <invoice-001@example.com>
+Return-Path: <bounce@example.com>
+Received:
+ from smtp1.example.com by mx.example.org; Tue, 13 Aug 2024 14:00:02 -0400
+Authentication-Results:
+ mx.example.org; spf=fail smtp.mailfrom=example.com; dkim=none; dmarc=fail
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============1884177783825880589=="
+
+--===============1884177783825880589==
+Content-Type: multipart/alternative;
+ boundary="===============9179679774847469396=="
+
+--===============9179679774847469396==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hi Bob,
+
+Your invoice is attached.
+
+Thanks,
+Billing Team
+
+--===============9179679774847469396==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+<html><body><p>Hi Bob,</p><p>Your invoice is attached.</p></body></html>
+
+--===============9179679774847469396==--
+
+--===============1884177783825880589==
+Content-Type: text/plain
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="invoice.txt"
+MIME-Version: 1.0
+
+SW52b2ljZSAjMDAxCkFtb3VudCBkdWU6ICQxMDAuMDAK
+
+--===============1884177783825880589==--
