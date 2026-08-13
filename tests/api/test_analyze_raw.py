@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.domain.parser import MAX_EMAIL_SIZE_BYTES
-from tests.api.conftest import load_fixture
+from tests.api.conftest import load_fixture, without_analysis_id
 
 
 def test_raw_simple_plain_fixture(client: TestClient):
@@ -14,6 +14,7 @@ def test_raw_simple_plain_fixture(client: TestClient):
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["analysis_id"]
     assert len(payload["iocs"]) == 9
     assert payload["findings"] == []
     assert payload["risk_score"]["level"] == "low"
@@ -31,7 +32,7 @@ def test_raw_phishing_fixture_matches_upload(client: TestClient):
 
     assert upload_response.status_code == 200
     assert raw_response.status_code == 200
-    assert upload_response.json() == raw_response.json()
+    assert without_analysis_id(upload_response.json()) == without_analysis_id(raw_response.json())
 
 
 def test_empty_raw_email_returns_422(client: TestClient):

@@ -2,7 +2,7 @@
 
 PhishLens is a local email security analyzer with a framework-independent domain layer. It parses `.eml` files, extracts indicators of compromise (IOCs), applies rule-based phishing heuristics, and produces a transparent risk score — all without sending email content to external services.
 
-**Current milestone:** Phase 5 complete (domain pipeline + FastAPI HTTP layer)
+**Current milestone:** Phase 6 complete (domain pipeline + FastAPI HTTP layer + SQLite analysis history)
 
 ---
 
@@ -18,7 +18,7 @@ The design separates each concern into its own phase so every layer can be teste
 
 ---
 
-## Architecture (Phases 1–5)
+## Architecture (Phases 1–6)
 
 ```
 .eml / raw bytes
@@ -45,6 +45,9 @@ The design separates each concern into its own phase so every layer can be teste
 └────────┬─────────┘
          ▼
 ┌──────────────────┐  Phase 5   FastAPI            → JSON over HTTP
+└────────┬─────────┘
+         ▼
+┌──────────────────┐  Phase 6   SQLite history     → persisted analyses
 └──────────────────┘
 ```
 
@@ -56,6 +59,7 @@ The design separates each concern into its own phase so every layer can be teste
 | 4 | `app/domain/scoring/` | Weighted risk score (0–100) |
 | Integration | `app/domain/pipeline.py` | `PhishLensAnalyzer` orchestrates Phases 1–4 |
 | 5 | `app/api/` | HTTP API wrapping the pipeline |
+| 6 | `app/infrastructure/` | SQLite persistence for analysis history |
 
 **Design principles**
 
@@ -77,14 +81,19 @@ PhishLens/
 │   │   ├── pipeline.py
 │   │   ├── analyzers/
 │   │   └── scoring/
-│   └── api/              # Phase 5 (FastAPI)
-│       ├── main.py
-│       ├── routes/
-│       ├── schemas/
-│       └── serializers/
+│   ├── api/              # Phase 5 (FastAPI)
+│   │   ├── main.py
+│   │   ├── routes/
+│   │   ├── schemas/
+│   │   └── serializers/
+│   └── infrastructure/   # Phase 6 (SQLite persistence)
+│       ├── database.py
+│       ├── models.py
+│       └── history_repository.py
 ├── tests/
 │   ├── unit/             # Phase 1–4 unit tests
 │   ├── integration/      # End-to-end pipeline tests
+│   ├── infrastructure/   # Repository tests
 │   ├── api/              # HTTP API tests
 │   └── fixtures/         # Sample .eml files
 └── pyproject.toml
@@ -108,8 +117,8 @@ pip install -e ".[api,dev]"
 | Extra | Packages | Purpose |
 |-------|----------|---------|
 | *(core)* | stdlib only | Domain layer (Phases 1–4) |
-| `api` | FastAPI, uvicorn, python-multipart | Run the HTTP server |
-| `dev` | pytest, httpx, FastAPI, python-multipart | Run tests |
+| `api` | FastAPI, uvicorn, python-multipart, SQLAlchemy | Run the HTTP server |
+| `dev` | pytest, httpx, FastAPI, python-multipart, SQLAlchemy | Run tests |
 
 ---
 
@@ -135,6 +144,8 @@ Interactive documentation:
 | `GET` | `/health` | Liveness check |
 | `POST` | `/api/analyze` | Upload a `.eml` file for analysis |
 | `POST` | `/api/analyze/raw` | Submit raw RFC 822 email text (UTF-8) |
+| `GET` | `/api/history` | List past analyses (paginated) |
+| `GET` | `/api/history/{id}` | Retrieve a saved analysis by ID |
 
 ### Upload limits
 
@@ -169,6 +180,7 @@ curl -X POST http://127.0.0.1:8000/api/analyze `
 
 ```json
 {
+  "analysis_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "parsed_email": {
     "from_address": "PayPal Security <security@paypa1-secure.com>",
     "subject": "Unusual activity on your account",
@@ -202,6 +214,75 @@ curl -X POST http://127.0.0.1:8000/api/analyze/raw `
   -d "{\"raw_email\": \"From: test@example.com\r\nTo: victim@example.com\r\nSubject: Hi\r\n\r\nHello.\"}"
 ```
 
+### List analysis history
+
+```powershell
+curl "http://127.0.0.1:8000/api/history?limit=20&offset=0"
+```
+
+**Example response:**
+
+```json
+{
+  "items": [
+    {
+      "analysis_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "created_at": "2026-08-13T20:44:00+00:00",
+      "source_type": "upload",
+      "source_filename": "phishing_duplicate_iocs.eml",
+      "subject": "Unusual activity on your account",
+      "from_address": "PayPal Security <security@paypa1-secure.com>",
+      "risk_score": 100,
+      "risk_level": "critical",
+      "ioc_count": 10,
+      "finding_count": 5
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+### Retrieve a saved analysis
+
+```powershell
+curl http://127.0.0.1:8000/api/history/a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
+Returns the full `AnalyzeResponse` (same shape as `/api/analyze`), including `analysis_id`. Returns HTTP 404 if the ID does not exist.
+
+---
+
+## Phase 6: Analysis history (SQLite)
+
+Phase 6 persists completed analyses to a local SQLite database using SQLAlchemy 2.x:
+
+- **`app/infrastructure/database.py`** — engine/session setup, idempotent `init_db()`
+- **`app/infrastructure/models.py`** — `AnalysisHistoryRecord` table with summary columns + full JSON payload
+- **`app/infrastructure/history_repository.py`** — `save()`, `get_by_id()`, `list()` (kept outside the domain layer)
+
+**What is stored**
+
+- Full serialized analysis result as JSON (`result_json`)
+- Summary columns: subject, sender, risk score/level, IOC/finding counts, source metadata
+- UTC `created_at` timestamp and UUID string primary key
+
+**What is NOT stored**
+
+- Raw `.eml` bytes
+- Attachment content bytes
+
+**Configuration**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PHISHLENS_DB_PATH` | `phishlens.db` | SQLite database file path |
+
+Database files (`*.db`) are listed in `.gitignore`.
+
+Successful analyses from `/api/analyze` and `/api/analyze/raw` are saved automatically and return an `analysis_id`. Failed requests (validation errors, oversize, etc.) are not persisted.
+
 ---
 
 ## Phase 5: FastAPI layer
@@ -230,17 +311,18 @@ Quick summary:
 python -m pytest tests/ -q
 ```
 
-### Test results (Phase 5 milestone)
+### Test results (Phase 6 milestone)
 
 ```
-178 passed
+190 passed
 ```
 
 | Suite | Tests | Scope |
 |-------|-------|-------|
 | `tests/unit/` | 156 | Phases 1–4 (parser, IOC, analyzers, scoring) |
 | `tests/integration/` | 6 | `PhishLensAnalyzer` pipeline |
-| `tests/api/` | 16 | FastAPI HTTP endpoints |
+| `tests/infrastructure/` | 6 | History repository |
+| `tests/api/` | 22 | FastAPI HTTP endpoints (including history) |
 
 ---
 
@@ -262,7 +344,6 @@ print(len(result.findings))      # 5
 
 ## What is not included yet
 
-- Database / analysis history (Phase 6+)
 - Authentication
 - Frontend dashboard
 - OSINT / threat intelligence enrichment

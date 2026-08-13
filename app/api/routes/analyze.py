@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from app.api.dependencies import get_analyzer
+from app.api.dependencies import get_analyzer, get_history_repository
 from app.api.schemas.requests import AnalyzeRawRequest
 from app.api.schemas.responses import AnalyzeResponse
 from app.api.serializers.analysis_result import serialize_analysis_result
 from app.domain.parser import EmailTooLargeError, MAX_EMAIL_SIZE_BYTES
 from app.domain.pipeline import PhishLensAnalyzer
+from app.infrastructure.history_repository import HistoryRepository
 
 router = APIRouter(prefix="/api", tags=["analyze"])
 
@@ -40,7 +41,14 @@ async def _read_upload_bytes(upload: UploadFile) -> bytes:
     return b"".join(chunks)
 
 
-def _analyze_bytes(analyzer: PhishLensAnalyzer, raw_bytes: bytes) -> AnalyzeResponse:
+def _analyze_and_persist(
+    analyzer: PhishLensAnalyzer,
+    repository: HistoryRepository,
+    raw_bytes: bytes,
+    *,
+    source_type: str,
+    source_filename: str | None = None,
+) -> AnalyzeResponse:
     try:
         result = analyzer.analyze(raw_bytes)
     except EmailTooLargeError:
@@ -52,25 +60,39 @@ def _analyze_bytes(analyzer: PhishLensAnalyzer, raw_bytes: bytes) -> AnalyzeResp
         ) from None
 
     payload = serialize_analysis_result(result)
-    return AnalyzeResponse.model_validate(payload)
+    response = AnalyzeResponse.model_validate(payload)
+    analysis_id = repository.save(
+        response,
+        source_type=source_type,
+        source_filename=source_filename,
+    )
+    return response.model_copy(update={"analysis_id": analysis_id})
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_upload(
     file: UploadFile = File(...),
     analyzer: PhishLensAnalyzer = Depends(get_analyzer),
+    repository: HistoryRepository = Depends(get_history_repository),
 ) -> AnalyzeResponse:
     _validate_eml_filename(file.filename)
     raw_bytes = await _read_upload_bytes(file)
     if not raw_bytes:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    return _analyze_bytes(analyzer, raw_bytes)
+    return _analyze_and_persist(
+        analyzer,
+        repository,
+        raw_bytes,
+        source_type="upload",
+        source_filename=file.filename,
+    )
 
 
 @router.post("/analyze/raw", response_model=AnalyzeResponse)
 def analyze_raw(
     request: AnalyzeRawRequest,
     analyzer: PhishLensAnalyzer = Depends(get_analyzer),
+    repository: HistoryRepository = Depends(get_history_repository),
 ) -> AnalyzeResponse:
     raw_bytes = request.raw_email.encode("utf-8")
     if len(raw_bytes) > MAX_EMAIL_SIZE_BYTES:
@@ -78,4 +100,9 @@ def analyze_raw(
             f"Email is {len(raw_bytes)} bytes, exceeds the "
             f"{MAX_EMAIL_SIZE_BYTES}-byte limit"
         )
-    return _analyze_bytes(analyzer, raw_bytes)
+    return _analyze_and_persist(
+        analyzer,
+        repository,
+        raw_bytes,
+        source_type="raw",
+    )

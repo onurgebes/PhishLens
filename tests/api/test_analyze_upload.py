@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.domain.parser import MAX_EMAIL_SIZE_BYTES
-from tests.api.conftest import load_fixture
+from tests.api.conftest import load_fixture, without_analysis_id
 
 
 def test_upload_simple_plain_fixture(client: TestClient):
@@ -16,6 +16,7 @@ def test_upload_simple_plain_fixture(client: TestClient):
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["analysis_id"]
     assert len(payload["iocs"]) == 9
     assert payload["findings"] == []
     assert payload["risk_score"]["score"] == 0
@@ -36,6 +37,7 @@ def test_upload_phishing_fixture(client: TestClient):
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["analysis_id"]
     assert len(payload["iocs"]) == 10
     assert len(payload["findings"]) == 5
     assert payload["risk_score"]["score"] == 100
@@ -123,4 +125,5 @@ def test_same_upload_produces_identical_json(client: TestClient):
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json() == second.json()
+    assert first.json()["analysis_id"] != second.json()["analysis_id"]
+    assert without_analysis_id(first.json()) == without_analysis_id(second.json())
