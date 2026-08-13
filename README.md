@@ -1,6 +1,6 @@
 # PhishLens
 
-PhishLens is a local, framework-independent email security analyzer. It parses `.eml` files, extracts indicators of compromise (IOCs), applies rule-based phishing heuristics, and produces a transparent risk score — all without sending email content to external services.
+PhishLens is a local email security analyzer with a framework-independent domain layer. It parses `.eml` files, extracts indicators of compromise (IOCs), applies rule-based phishing heuristics, and produces a transparent risk score — all without sending email content to external services.
 
 **Current milestone:** Phase 5 complete (domain pipeline + FastAPI HTTP layer)
 
