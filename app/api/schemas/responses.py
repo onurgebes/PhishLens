@@ -66,31 +66,10 @@ class RiskScoreResponse(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
-    analysis_id: str | None = None
     parsed_email: ParsedEmailResponse
     iocs: list[IOCResponse]
     findings: list[FindingResponse]
     risk_score: RiskScoreResponse
-
-
-class HistorySummaryResponse(BaseModel):
-    analysis_id: str
-    created_at: str
-    source_type: str
-    source_filename: str | None
-    subject: str | None
-    from_address: str | None
-    risk_score: int
-    risk_level: str
-    ioc_count: int
-    finding_count: int
-
-
-class HistoryListResponse(BaseModel):
-    items: list[HistorySummaryResponse]
-    total: int
-    limit: int
-    offset: int
 
 
 class HealthResponse(BaseModel):
