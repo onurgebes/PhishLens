@@ -25,6 +25,7 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:5173",
             "http://127.0.0.1:61822",  # Browser preview proxy
             "https://phishlens-eight.vercel.app",  # Production frontend
+            "https://phish-lens-pearl.vercel.app",  # Deployed frontend
         ],
         allow_credentials=True,
         allow_methods=["*"],
